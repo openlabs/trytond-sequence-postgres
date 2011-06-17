@@ -7,6 +7,8 @@
 from trytond.model import ModelView, ModelSQL, fields
 from trytond.transaction import Transaction
 from trytond.config import CONFIG
+CONFIG['db_type'] = 'postgresql'
+
 
 class Sequence(ModelSQL, ModelView):
     "Postgres Sequence"
@@ -33,7 +35,7 @@ class Sequence(ModelSQL, ModelView):
         ids = [ids] if isinstance(ids, (long, int)) else ids
         for id in ids:
             type_before_write = self.browse(id).type
-            rv = super(Sequence, self).write(ids, values)
+            rv = super(Sequence, self).write(id, values)
             if type_before_write != 'postgres_seq':
                 if values.get('type') != 'postgres_seq':
                     return rv
@@ -60,51 +62,55 @@ class Sequence(ModelSQL, ModelView):
         """
         # The name of the sequence in the database
         sequence = self.browse(id)
-
-        Transaction().cursor.execute("""CREATE SEQUENCE ir_sequence_%s INCREMENT BY %s 
-            START WITH %s""", (id, sequence.number_increment, 
-                sequence.number_next,))
+        
+        with Transaction().new_cursor() as transaction:
+            transaction.cursor.execute("""CREATE SEQUENCE ir_sequence_%s 
+                INCREMENT BY %s START WITH %s""", (id, 
+                    sequence.number_increment, sequence.number_next,))
+            transaction.cursor.commit()
 
         return True
 
     def alter_sequence(self, id):
         """ALTER the current sequence"""
         sequence = self.browse(id)
-        Transaction().cursor.execute("""ALTER SEQUENCE ir_sequence_%s INCREMENT BY %s 
-            RESTART WITH %s""", (id, sequence.number_increment, 
+        
+        with Transaction().new_cursor() as transaction:
+            transaction.cursor.execute("""ALTER SEQUENCE ir_sequence_%s 
+            INCREMENT BY %s RESTART WITH %s""", (id, sequence.number_increment, 
                 sequence.number_next))
+            transaction.cursor.commit()
 
         return True
 
     def drop_sequence(self, id):
         """DROP the current sequence"""
         sequence = self.browse(id)
-        Transaction().cursor.execute("""DROP SEQUENCE ir_sequence_%s""", (id,))
+        
+        with Transaction().new_cursor() as transaction:
+            transaction.cursor.execute("""DROP SEQUENCE ir_sequence_%s""", 
+                (id,))
+            transaction.cursor.commit()
 
         return True
-
-    def get_id(self, domain):
+        
+    def _get_sequence(self, sequence):
         """If the sequence type is default pass it on to super function else
         call the select sequence.
 
         :param domain: This may be the id of the sequence or a domain.
         """
-        if isinstance(domain, (int, long)):
-            domain = [('id', '=', domain)]
-            
-        identifier, = self.search(domain, limit=1)
-
-        sequence = self.browse(identifier)
         if sequence.type == 'postgres_seq':
-            Transaction().cursor.execute("SELECT nextval('ir_sequence_%s')", 
-                (sequence.id,))
-            next_id = Transaction().cursor.fetchone()
-            return ''.join([
-                self._process(sequence.prefix),
-                '%%0%sd' % sequence.padding % next_id,
-                self._process(sequence.suffix)])
+            with Transaction().set_user(0):
+                Transaction().cursor.execute("SELECT nextval('ir_sequence_%s')", 
+                    (sequence.id,))
+                next_id = Transaction().cursor.fetchone()
+                return ''.join([
+                    self._process(sequence.prefix),
+                    '%%0%sd' % sequence.padding % next_id,
+                    self._process(sequence.suffix)])
 
         else:
-            return super(Sequence, self).get_id(domain)
+            return super(Sequence, self)._get_sequence(sequence)
 
 Sequence()
