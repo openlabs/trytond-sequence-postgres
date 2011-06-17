@@ -105,11 +105,7 @@ class Sequence(ModelSQL, ModelView):
                 Transaction().cursor.execute("SELECT nextval('ir_sequence_%s')", 
                     (sequence.id,))
                 next_id = Transaction().cursor.fetchone()
-                return ''.join([
-                    self._process(sequence.prefix),
-                    '%%0%sd' % sequence.padding % next_id,
-                    self._process(sequence.suffix)])
-
+                return '%%0%sd' % sequence.padding % next_id
         else:
             return super(Sequence, self)._get_sequence(sequence)
 
