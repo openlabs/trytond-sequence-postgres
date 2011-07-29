@@ -7,7 +7,6 @@
 from trytond.model import ModelView, ModelSQL, fields
 from trytond.transaction import Transaction
 from trytond.config import CONFIG
-CONFIG['db_type'] = 'postgresql'
 
 
 class Sequence(ModelSQL, ModelView):
